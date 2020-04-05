@@ -1,0 +1,477 @@
+---
+title: "Coronavirus"
+author: "eider"
+date: "3/26/2020"
+output: html_document
+---
+
+In December 2019, COVID-19 coronavirus was first identified in the Wuhan region of China. By March 11, 2020, the World Health Organization (WHO) categorized the COVID-19 outbreak as a pandemic. A lot has happened in the months in between with major outbreaks in Iran, South Korea, and Italy.
+
+We know that COVID-19 spreads through respiratory droplets, such as through coughing, sneezing, or speaking. But, how quickly did the virus spread across the globe? And, can we see any effect from country-wide policies, like shutdowns and quarantines?
+
+Fortunately, organizations around the world have been collecting data so that governments can monitor and learn from this pandemic. Notably, the Johns Hopkins University Center for Systems Science and Engineering created a publicly available data repository to consolidate this data from sources like the WHO, the Centers for Disease Control and Prevention (CDC), and the Ministry of Health from multiple countries.
+
+In this notebook, you will visualize COVID-19 data from the first several weeks of the outbreak to see at what point this virus became a global pandemic.
+
+Please note that information and data regarding COVID-19 is frequently being updated. The data used in this project was pulled on March 17, 2020, and should not be considered to be the most up to date data available.
+
+
+## load the libraries 
+```{r setup, echo = FALSE, include = FALSE, message=FALSEE}
+
+#install.packages("coronavirus") 
+library(coronavirus) 
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+
+## visualize coronavirus dataframe and a summary dataframe grouped by country and type
+```{r}
+
+#data("coronavirus")
+
+
+coronavirus <- read_csv(url("https://raw.githubusercontent.com/RamiKrispin/coronavirus-csv/master/coronavirus_dataset.csv"))
+
+
+
+#countries worldwide with more than 500 confirmned cases
+confirmed_500cases <- coronavirus %>%
+  group_by(Country.Region) %>%
+  filter(type=="confirmed") %>% 
+  summarise(total_cases = sum(cases)) %>%
+  filter(total_cases> 500)
+
+nrow(confirmed_500cases)
+
+
+head(coronavirus)
+
+
+#administrative_coverage <- #read_excel("C:/Users/eider/Downloads/KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK#KKKKKK/administrative_coverage.xls",sheet = "Data", na = "N/A")
+#
+#
+#BCG_coverage <- administrative_coverage %>% 
+#  group_by(PerCentCoverage, NamePublicationEnglish) %>%
+#  filter(VaccineCode == "BCG") 
+#
+#
+#nrow(BCG_coverage)
+#BCG_coverage <- BCG_coverage[complete.cases(BCG_coverage),]
+#  
+#
+#unique(BCG_coverage$Year)
+#
+
+#group the data by region and type and calculate the total cases 
+region_type_worldwide <- coronavirus %>% group_by(Country.Region, type) %>%
+  summarise(total_cases = sum(cases)) %>%
+  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+  arrange(-total_cases)
+
+
+  
+
+
+#coronavirus
+
+```
+
+```{r}
+ # "confirmed" 
+confirmed_cases_worldwide <- coronavirus %>%
+  group_by(Country.Region) %>%
+  filter(type=="confirmed") %>% 
+  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+  summarise(confirmed_cases = sum(cases)) %>%
+  arrange(-confirmed_cases)
+
+#"recovered"  
+recovered_cases_worldwide <- coronavirus %>%
+  group_by(Country.Region) %>%
+  filter(type=="recovered") %>% 
+  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+  summarise(recovered_cases = sum(cases)) %>%
+  arrange(-recovered_cases)
+# "death"  
+
+death_cases_worldwide <- coronavirus %>%
+  group_by(Country.Region) %>%
+  filter(type=="death") %>% 
+  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+  summarise(death_cases = sum(cases)) %>%
+  arrange(-death_cases)
+
+nrow(recovered_cases_worldwide)
+#________________________________sparse________________________
+#library(Matrix)
+#  confirmed <- as.vector(confirmed_cases_worldwide[,2])
+#  recovered<- as.vector(recovered_cases_worldwide[,2])
+#  deaths<- as.vector(death_cases_worldwide[,2])
+#  deaths[,1]
+#sprse<- c(confirmed,recovered,deaths)
+#vec<-unlist(sprse)
+#vec[which(c(1,diff(vec)) != 0)]
+#
+#
+#matspare <- as(matrix(data =vec,nrow=nrow(confirmed) ),"dgCMatrix")
+#
+#sparsematrix <- as.matrix(matspare)
+#colnames(sparsematrix ) <- c("confirmed" ,"recovered", "death")
+#rownames(sparsematrix) <- confirmed_cases_worldwide$Country.Region
+#
+#save(sparsematrix,file="sparsematrix.RDATA" )
+
+```
+
+
+#top middle and last 5
+```{r}
+#sample 5 cases per 
+
+#________confirmed______________
+top_5_confirmed <- confirmed_cases_worldwide[1:10,]
+#middle 5
+mid = round(nrow(confirmed_cases_worldwide)/2)
+middle_5_confirmed <- confirmed_cases_worldwide[mid:(mid+10),]
+  
+#last 5
+last_5_confirmed <- confirmed_cases_worldwide[(nrow(confirmed_cases_worldwide)-10):
+                                      nrow(confirmed_cases_worldwide),]
+
+
+nrow(confirmed_cases_worldwide)/3
+
+
+#________recovered______________
+top_5_recovered <- recovered_cases_worldwide[1:10,]
+#middle 5
+mid = round(nrow(recovered_cases_worldwide)/2)
+middle_5_recovered <- recovered_cases_worldwide[mid:(mid+10),]
+  
+#last 5
+last_5_recovered <- recovered_cases_worldwide[(nrow(recovered_cases_worldwide)-10):
+                                      nrow(recovered_cases_worldwide),]
+#________death______________
+
+
+top_5_recovered <- recovered_cases_worldwide[1:10,]
+#middle 5
+mid = round(nrow(recovered_cases_worldwide)/2)
+middle_5_recovered <- recovered_cases_worldwide[mid:(mid+10),]
+  
+#last 5
+last_5_recovered <- recovered_cases_worldwide[(nrow(recovered_cases_worldwide)-10):
+                                      nrow(recovered_cases_worldwide),]
+
+
+```
+
+
+```{r}
+
+top_5_region_type <- region_type_worldwide %>%
+   filter(Country.Region %in% top_5_confirmed$Country.Region) 
+
+
+
+
+#top
+ ggplot(top_5_region_type,aes(x=type,y=total_cases))+
+  geom_boxplot()
+#mid
+ 
+ggplot(region_type_worldwide%>% filter(Country.Region %in% middle_5_confirmed$Country.Region)
+         ,aes(x=type,y=total_cases))+
+  geom_boxplot()
+#last
+ggplot(region_type_worldwide%>% filter(Country.Region %in% last_5_confirmed$Country.Region)
+          ,aes(x=type,y=total_cases))+
+  geom_boxplot()
+   
+   
+
+   ####
+   
+  ggplot(region_type_worldwide, aes(x = type, y =total_cases ,size=total_cases ,
+                                    color = type)) +
+    geom_point() +
+    
+    geom_label( 
+    data=data %>% filter(mpg>20 & wt>3), # Filter data first
+    aes(label=carName)
+  )
+    #expand_limits(y = 0) 
+
+#summary(confirmed_cases_worldwide)
+```
+
+
+```{r}
+matrix_covid <- sparsematrix %>%
+  as.matrix()
+```
+
+
+```{r}
+set.seed(42)
+library(flexmix)
+poisson_mm <- stepFlexmix(matrix_covid ~ 1, 
+                                 k = 2:15, 
+                                 nrep = 5, 
+                                 model = FLXMCmvpois(),
+                                 control = list(tolerance = 1e-15, iter.max = 1000))
+
+hist(matrix_covid)
+# Select the model that minimize the BIC
+best_poisson_mm <- getModel(poisson_mm, which = "BIC")
+
+```
+
+
+
+```{r}
+library(tidyr)
+#install.packages("dplyr")
+# Get the parameters into a data frame
+params_lambdas <- data.frame(parameters(best_poisson_mm))
+
+# Add the column with the type of type
+params_lambdas_type <- params_lambdas %>% 
+  mutate(type = colnames(matrix_covid))
+
+# Plot the clusters with their lambdas
+params_lambdas_type %>% 
+  gather(cluster, lambdas, -type) %>% 
+  ggplot(aes(x = type, y = lambdas, fill = type)) + 
+  geom_bar(stat = "identity") +
+  facet_wrap(~ cluster) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), 
+        legend.position = "none")
+
+```
+
+```{r}
+# Add the cluster assignments
+crimes_with_clusters <- crimes %>% 
+  mutate(cluster = factor(clusters(best_poisson_mm)))
+
+# Enumerate the cluster's elements
+crimes_with_clusters <- crimes_with_clusters %>% 
+  group_by(cluster) %>% 
+  mutate(number = row_number()) 
+
+# Plot the clusters with the communities
+crimes_with_clusters %>% 
+  ggplot(aes(x = cluster, y = number, col = cluster)) + 
+  geom_text(aes(label = community), size = 2.3)+
+  theme(legend.position="none")
+```
+
+
+```{r, echo = FALSE}
+#group the data by data and calculate the cumulative sum of cases 
+
+confirmed_cases_worldwide <- coronavirus %>% 
+  filter(type== "confirmed") %>%
+  group_by(date) %>%
+  summarise(total_cases = sum(cases)) %>%
+  mutate(cum_cases = cumsum(total_cases))
+
+
+recovered_cases_worldwide <- coronavirus %>% 
+  filter(type== "recovered") %>%
+  group_by(date) %>%
+  summarise(total_cases = sum(cases)) %>%
+  mutate(cum_cases = cumsum(total_cases))
+
+
+#death cases
+glimpse(confirmed_cases_worldwide)
+glimpse(recovered_cases_worldwide)
+
+
+```
+
+
+## plot Confirmed cases throughout the world
+
+```{r, echo = FALSE}
+# Draw a line plot of cumulative cases vs. date
+# Label the y-axis
+ggplot(confirmed_cases_worldwide,aes(x=date,y=cum_cases)) +
+  geom_line() +
+  ylab("Cumulative confirmed cases")
+
+
+
+```
+
+
+
+##  China compared to the rest of the world
+
+The y-axis in that plot is pretty scary, with the total number of confirmed cases around the world approaching 200,000. Beyond that, some weird things are happening: there is an odd jump in mid February, then the rate of new cases slows down for a while, then speeds up again in March. We need to dig deeper to see what is happening.
+
+Early on in the outbreak, the COVID-19 cases were primarily centered in China. Let's plot confirmed COVID-19 cases in China and the rest of the world separately to see if it gives us any insight.
+
+```{r, echo = FALSE}
+confirmed_cases_china_vs_world <- coronavirus %>% 
+  mutate(is_china = ifelse(Country.Region == "China", "China", "Not China")) %>%
+  filter(type== "confirmed") %>%
+  group_by(is_china, date) %>%
+  summarise(cum_cases = sum(cases, na.rm = T)) %>% ungroup() %>%
+  arrange(is_china, date) %>%
+  group_by(is_china) %>% 
+  mutate(cum_cases = cumsum(cum_cases)) %>% ungroup()
+
+
+#glimpse(confirmed_cases_china_vs_world)
+
+# Draw a line plot of cumulative cases vs. date, grouped and colored by is_china
+# Define aesthetics within the line geom
+plt_cum_confirmed_cases_china_vs_world <- ggplot(confirmed_cases_china_vs_world) +
+  geom_line(aes(x=date,
+                y=cum_cases,
+                col=is_china,
+               group=is_china)) +
+  ylab("Cumulative confirmed cases")
+# See the plot
+plt_cum_confirmed_cases_china_vs_world
+
+```
+
+the two lines have very different shapes. In February, the majority of cases were in China. That changed in March when it really became a global outbreak: around March 14, the total number of cases outside China overtook the cases inside China. This was days after the WHO declared a pandemic.
+
+There were a couple of other landmark events that happened during the outbreak. For example, the huge jump in the China line on February 13, 2020 wasn't just a bad day regarding the outbreak; China changed the way it reported figures on that day (CT scans were accepted as evidence for COVID-19, rather than only lab tests).
+
+By annotating events like this, we can better interpret changes in the plot.
+
+
+```{r echo=FALSE}
+who_events <- tribble(
+  ~ date, ~ event,
+  "2020-01-30", "Global health\nemergency declared",
+  "2020-03-11", "Pandemic\ndeclared",
+  "2020-02-13", "China reporting\nchange") %>%
+  mutate(date = as.Date(date))
+# Using who_events, add vertical dashed lines with an xintercept at date
+# and text at date, labeled by event, and at 100000 on the y-axis
+
+who_event_plot <- plt_cum_confirmed_cases_china_vs_world +
+  geom_vline(data = who_events,
+             aes(xintercept = date),
+             linetype = "dashed") +
+  geom_text(data = who_events,
+            aes(x = date,
+            label = event), y = 300000)
+
+who_event_plot
+
+  
+```
+## Adding a trend line to China
+
+When trying to assess how big future problems are going to be, we need a measure of how fast the number of cases is growing. A good starting point is to see if the cases are growing faster or slower than linearly.
+
+There is a clear surge of cases around February 13, 2020, with the reporting change in China. However, a couple of days after, the growth of cases in China slows down. How can we describe COVID-19's growth in China after February 15, 2020?
+
+```{r}
+# Filter for China, from Feb 15
+china_after_feb15 <- confirmed_cases_china_vs_world %>%
+  filter(is_china== "China", date>="2020-02-15" ) 
+
+# Using china_after_feb15, draw a line plot cum_cases vs. date
+# Add a smooth trend line using linear regression, no error bars
+ggplot(china_after_feb15, aes(x = date, y = cum_cases)) +
+  geom_line() +
+  geom_smooth(formula = y~x, method = "lm", se = FALSE) +
+  ylab("Cumulative confirmed cases") 
+```
+
+## And the rest of the world?
+
+From the plot above, the growth rate in China is slower than linear. That's great news because it indicates China has at least somewhat contained the virus in late February and early March.
+
+How does the rest of the world compare to linear growth?
+```{r}
+# Filter confirmed_cases_china_vs_world for not China
+not_china <- confirmed_cases_china_vs_world %>%
+  filter(is_china== "Not China" ) 
+
+# Using not_china, draw a line plot cum_cases vs. date
+# Add a smooth trend line using linear regression, no error bars
+plt_not_china_trend_lin <- ggplot(not_china, aes(x=date,y=cum_cases)) +
+  geom_line() +
+  geom_smooth(formula = y~x, method = "lm", se = FALSE) +
+  ylab("Cumulative confirmed cases")
+
+# See the result
+plt_not_china_trend_lin 
+```
+## Adding a logarithmic scale
+From the plot above, we can see a straight line does not fit well at all, and the rest of the world is growing much faster than linearly. What if we added a logarithmic scale to the y-axis?
+
+```{r}
+# Modify the plot to use a logarithmic scale on the y-axis
+plt_not_china_trend_lin + 
+  scale_y_log10()
+```
+
+## Which countries outside of China have been hit hardest?
+With the logarithmic scale, we get a much closer fit to the data. From a data science point of view, a good fit is great news. Unfortunately, from a public health point of view, that means that cases of COVID-19 in the rest of the world are growing at an exponential rate, which is terrible news.
+
+Not all countries are being affected by COVID-19 equally, and it would be helpful to know where in the world the problems are greatest. Let's find the countries outside of China with the most confirmed cases in our dataset.
+
+```{r}
+# Run this to get the data for each country
+# Group by country, summarize to calculate total cases, find the top 7
+top_countries_by_total_cases <- coronavirus %>%
+  filter(Country.Region != "China", type=="confirmed") %>%
+  group_by(Country.Region) %>%
+  summarise(total_cases = sum(cases, na.rm = T)) %>%
+  top_n(7) %>%
+  arrange(desc(total_cases))
+
+  top_countries_by_total_cases
+  
+  
+
+```
+
+## Plotting hardest hit countries as of Mid-March 2020
+
+Even though the outbreak was first identified in China, there is only one country from East Asia (South Korea) in the above table. Four of the listed countries (France, Germany, Italy, and Spain) are in Europe and share borders. To get more context, we can plot these countries' confirmed cases over time.
+
+
+```{r}
+# Using confirmed_cases_top7_outside_china, draw a line plot of
+# cum_cases vs. date, grouped and colored by countrytop7_line
+
+top_countries_by_total_cases <- coronavirus %>%
+  filter(date > "2020-02-17") %>%
+  group_by(Country.Region, date) %>%
+  summarise(cum_cases = sum(cases, na.rm = T)) %>% ungroup() %>%
+  arrange(Country.Region, date) %>%
+  group_by(Country.Region) %>% 
+  mutate(cum_cases = cumsum(cum_cases)) %>%
+  filter(Country.Region %in% top_countries_by_total_cases$Country.Region) %>%
+  arrange(desc(cum_cases))
+
+
+ggplot(top_countries_by_total_cases,
+                    aes(x=date, y=cum_cases, color=Country.Region, group=Country.Region))+
+              geom_line() +
+              ylab("Cumulative confirmed cases")
+
+
+
+
+```
+# add the mexico 
+```{r}
+
+```
+
