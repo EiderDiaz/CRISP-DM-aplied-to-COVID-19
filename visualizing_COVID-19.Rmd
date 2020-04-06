@@ -33,9 +33,10 @@ library(ggplot2)
 #data("coronavirus")
 
 
+
 coronavirus <- read_csv(url("https://raw.githubusercontent.com/RamiKrispin/coronavirus-csv/master/coronavirus_dataset.csv"))
 
-
+glimpse(coronavirus)
 
 #countries worldwide with more than 500 confirmned cases
 confirmed_500cases <- coronavirus %>%
@@ -52,10 +53,13 @@ head(coronavirus)
 
 #administrative_coverage <- #read_excel("C:/Users/eider/Downloads/KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK#KKKKKK/administrative_coverage.xls",sheet = "Data", na = "N/A")
 #
-#
-#BCG_coverage <- administrative_coverage %>% 
-#  group_by(PerCentCoverage, NamePublicationEnglish) %>%
-#  filter(VaccineCode == "BCG") 
+BCG_coverage <- administrative_coverage %>% 
+  group_by(PerCentCoverage, NamePublicationEnglish) %>%
+  filter(VaccineCode == "BCG") 
+
+glimpse(BCG_coverage) 
+
+
 #
 #
 #nrow(BCG_coverage)
@@ -105,6 +109,13 @@ death_cases_worldwide <- coronavirus %>%
   arrange(-death_cases)
 
 nrow(recovered_cases_worldwide)
+
+
+
+cases_bytype_worldwide <- merge(confirmed_cases_worldwide, recovered_cases_worldwide, by= "Country.Region")
+
+cases_bytype_worldwide <-  merge(cases_bytype_worldwide, death_cases_worldwide, by="Country.Region")
+
 #________________________________sparse________________________
 #library(Matrix)
 #  confirmed <- as.vector(confirmed_cases_worldwide[,2])
@@ -127,95 +138,378 @@ nrow(recovered_cases_worldwide)
 ```
 
 
-#top middle and last 5
+#divide dataset into 2
 ```{r}
-#sample 5 cases per 
 
 #________confirmed______________
-top_5_confirmed <- confirmed_cases_worldwide[1:10,]
+#top_5_confirmed <- confirmed_cases_worldwide[1:10,]
 #middle 5
-mid = round(nrow(confirmed_cases_worldwide)/2)
-middle_5_confirmed <- confirmed_cases_worldwide[mid:(mid+10),]
-  
+#mid = round(nrow(confirmed_cases_worldwide)/2)
 #last 5
-last_5_confirmed <- confirmed_cases_worldwide[(nrow(confirmed_cases_worldwide)-10):
-                                      nrow(confirmed_cases_worldwide),]
+#last_5_confirmed <- confirmed_cases_worldwide[(nrow(confirmed_cases_worldwide)-10):
+                                      #nrow(confirmed_cases_worldwide),]
 
 
-nrow(confirmed_cases_worldwide)/3
+# divide the coronavirus cases into 3 categories 
+gap1<- 1:round(nrow(confirmed_cases_worldwide)/3)
+gap2 <- (gap+1):((gap+1)+gap)
+gap3<- (max(gap2)+1):nrow(confirmed_cases_worldwide) 
+
+group1_confirmed <- region_type_worldwide[gap1,]
+group2_confirmed <- region_type_worldwide[gap2,]
+group3_confirmed <- region_type_worldwide[gap3,]
+
+region_type_worldwide <- region_type_worldwide %>% 
+  mutate(group = case_when(
+              Country.Region %in% group1_confirmed$Country.Region ~ 1,
+                Country.Region %in% group2_confirmed$Country.Region ~2,
+                Country.Region %in% group3_confirmed$Country.Region~3,
+              TRUE ~ NA_real_))
 
 
-#________recovered______________
-top_5_recovered <- recovered_cases_worldwide[1:10,]
-#middle 5
-mid = round(nrow(recovered_cases_worldwide)/2)
-middle_5_recovered <- recovered_cases_worldwide[mid:(mid+10),]
-  
-#last 5
-last_5_recovered <- recovered_cases_worldwide[(nrow(recovered_cases_worldwide)-10):
-                                      nrow(recovered_cases_worldwide),]
-#________death______________
-
-
-top_5_recovered <- recovered_cases_worldwide[1:10,]
-#middle 5
-mid = round(nrow(recovered_cases_worldwide)/2)
-middle_5_recovered <- recovered_cases_worldwide[mid:(mid+10),]
-  
-#last 5
-last_5_recovered <- recovered_cases_worldwide[(nrow(recovered_cases_worldwide)-10):
-                                      nrow(recovered_cases_worldwide),]
 
 
 ```
 
-
+#boxplot of groups by cofirmed cases
 ```{r}
 
-top_5_region_type <- region_type_worldwide %>%
-   filter(Country.Region %in% top_5_confirmed$Country.Region) 
+confirmed <- group1_confirmed %>%
+  filter(type=="recovered") 
+  
 
-
-
+sd(confirmed$total_cases)
+summary(confirmed)
 
 #top
- ggplot(top_5_region_type,aes(x=type,y=total_cases))+
-  geom_boxplot()
+ ggplot(group1_confirmed,aes(x=type,y=total_cases))+
+  geom_boxplot()+
+  geom_label( 
+    data=group1_confirmed %>% filter( (type=="confirmed" & total_cases>200000) | (type=="recovered" & total_cases>50000)  ), # Filter data first
+    aes(label=Country.Region))
 #mid
  
-ggplot(region_type_worldwide%>% filter(Country.Region %in% middle_5_confirmed$Country.Region)
-         ,aes(x=type,y=total_cases))+
-  geom_boxplot()
+ggplot(group2_confirmed,aes(x=type,y=total_cases))+
+  geom_boxplot()+
+   geom_label( 
+    data=group2_confirmed %>% filter( (type=="confirmed" & total_cases>8000) ), # Filter data first
+    aes(label=Country.Region))
+  
 #last
-ggplot(region_type_worldwide%>% filter(Country.Region %in% last_5_confirmed$Country.Region)
-          ,aes(x=type,y=total_cases))+
-  geom_boxplot()
+ggplot(group3_confirmed,aes(x=type,y=total_cases))+
+  geom_boxplot()+
+   geom_label( 
+    data=group3_confirmed %>% filter( (type=="recovered" & total_cases>2000)  ), # Filter data first
+    aes(label=Country.Region))
    
    
 
    ####
    
-  ggplot(region_type_worldwide, aes(x = type, y =total_cases ,size=total_cases ,
-                                    color = type)) +
-    geom_point() +
+  ggplot(region_type_worldwide, aes(x = type, 
+                                    y =total_cases ,
+                                    size=total_cases ,
+                                    color = as.factor(group))) +
+    geom_point() 
     
-    geom_label( 
-    data=data %>% filter(mpg>20 & wt>3), # Filter data first
-    aes(label=carName)
-  )
-    #expand_limits(y = 0) 
+    #geom_label( 
+    #data=data %>% filter(mpg>20 & wt>3), # Filter data first
+    #aes(label=carName))
 
-#summary(confirmed_cases_worldwide)
+```
+
+#import BCG dataset 
+```{r}
+
+
+BCG_dataset<- read.csv("./BCG-ATLAS.csv")
+
+glimpse(BCG_dataset)
+#using only the filtered countries
+BCG_dataset <-  BCG_dataset %>%
+  filter(country %in% confirmed_500cases$Country.Region) 
+nrow(BCG_dataset)
+#compliting the missin cases
+BCG_dataset <- rbind(BCG_dataset, c("Diamond Princess",NA,NA,NA,NA,NA,NA,NA),
+      c("Serbia Princess",NA,NA,NA,NA,NA,NA,NA) )
+
+
+df.expanded <- BCG_dataset[rep(row.names(BCG_dataset), 3), 1:4]
+
+df.expanded %>%
+  arrange(country)
+
+
+
+df_merged <- merge(region_type_worldwide, df.expanded, by.x = "Country.Region", by.y = "country",all.x = TRUE,all.y = FALSE)
+
+enriched_ds <- df_merged
+
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+
+
 ```
 
 
 ```{r}
-matrix_covid <- sparsematrix %>%
-  as.matrix()
+#boxplot for income
+ggplot(enriched_ds %>% filter(type=="confirmed" & total_cases>1000) ,aes(x=Income.group..World.Bank.,y=total_cases))+
+  geom_boxplot()
+
+#anova 
+anova_one_way <- aov(total_cases~Income.group..World.Bank., data = enriched_ds)
+
+summary(anova_one_way)
+
+unique(df_merged$Current.BCG.vaccination.)
+df_merged <- completeFun(enriched_ds,"Current.BCG.vaccination.")
+
+#scatter enriched
+ ggplot(df_merged, aes(x = type, 
+                                    y =total_cases ,
+                                    
+                                    color = as.factor(Current.BCG.vaccination.))) +
+    geom_point() 
+```
+
+```{r}
+
+enriched_ds$group <- NULL
+enriched_ds$region <- as.numeric(enriched_ds$region)
+enriched_ds$Income.group..World.Bank. <- as.numeric(enriched_ds$Income.group..World.Bank.)
+enriched_ds$type <- as.numeric(as.factor(enriched_ds$type))
+enriched_ds$Current.BCG.vaccination. <- as.numeric(enriched_ds$Current.BCG.vaccination.)
+
+
+
+cormat <- round(cor(enriched_ds[,-1]),2)
+
+#library(reshape2)
+melted_cormat <- melt(cormat)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+
+# Get lower triangle of the correlation matrix
+  get_lower_tri<-function(cormat){
+    cormat[upper.tri(cormat)] <- NA
+    return(cormat)
+  }
+  # Get upper triangle of the correlation matrix
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+
+  
+upper_tri <- get_upper_tri(cormat)
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))+
+ coord_fixed()
+  
+```
+
+#merge cases by type with 
+
+```{r}
+
+BCG<- read.csv("./BCG-ATLAS.csv")
+
+#using only the filtered countries
+BCG <-  BCG %>%
+  filter(country %in% confirmed_500cases$Country.Region) 
+
+
+unique( BCG$Current.BCG.vaccination.)
+cases_bytype_worldwide <- merge(cases_bytype_worldwide, BCG, by.x = "Country.Region", by.y = "country",all.x = TRUE,all.y = FALSE)
+
+#glimpse(cases_bytype_worldwide)
+unique(cases_bytype_worldwide$Current.BCG.vaccination.)
+
+
+subseting <- c("Country.Region", "confirmed_cases", "recovered_cases", "death_cases", "Current.BCG.vaccination.")
+
+just_typesBCG <- cases_bytype_worldwide[subseting]
+unique()
+#just_typesBCG <- completeFun(just_typesBCG,"Current.BCG.vaccination.")
+just_typesBCG$Current.BCG.vaccination. <- (just_typesBCG$Current.BCG.vaccination=="Yes")*1
+
+
+
+unique( just_typesBCG$Current.BCG.vaccination.)
+
+
+cormat <- round(cor(just_typesBCG[,-1]),3)
+
+#library(reshape2)
+melted_cormat <- melt(cormat)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+
+
+
+  
+upper_tri <- get_upper_tri(cormat)
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))+
+ coord_fixed()
+
+```
+
+
+
+
+```{r}
+# http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r
+
+
+
+current_BCG <- just_typesBCG$Current.BCG.vaccination.
+confirmed_cases_ <-just_typesBCG$confirmed_cases
+#PEARSON
+unique(just_typesBCG$Current.BCG.vaccination.)
+pearson_cor <- cor(current_BCG, confirmed_cases_, method = "spearman")
+pearson_cor # positive relationship
+ggscatter(just_typesBCG, x = "Current.BCG.vaccination.", y = "confirmed_cases", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "current BCG vaccination", ylab = "Confirmed cases")
+```
+
+
+
+```{r}
+
+
+  
+
+clean_ds <- cases_bytype_worldwide[,-1]
+#colnames(clean_ds)
+selectedfeatures <- c( "confirmed_cases", "recovered_cases", "death_cases", "Current.BCG.vaccination.","Income.group..World.Bank.","region")
+
+clean_ds <- clean_ds[selectedfeatures]
+clean_ds$Current.BCG.vaccination. <- (clean_ds$Current.BCG.vaccination.=="Yes")*1
+
+clean_ds$Income.group..World.Bank. <- as.numeric(clean_ds$Income.group..World.Bank)
+clean_ds$region <- as.numeric(clean_ds$region)
+
+library(FRESA.CAD)
+
+bm <- BSWiMS.model(confirmed_cases~.,clean_ds,NumberofRepeats = 10)
+bm$bagging$frequencyTable
+bm$univariate[1:10,]
+
+#                     classSamplingType= "Proportional",
+
+LASSO_1SE_cv <- randomCV(lesionsSumDiffRed,
+                     "Recurence",
+                     fittingFunction = LASSO_1SE,
+                     trainFraction = 0.75,
+                     repetitions = 75,
+                     NumberofRepeats = 1)
+
+
+
+caregbmcv <- randomCV(fittingFunction=train,
+                  trainSampleSets=BSWiMScv$trainSamplesSets,
+                  asFactor = TRUE,
+                  method = "gbm",
+                  trControl = noTuningControl,
+                  tuneGrid = data.frame(interaction.depth = 3,
+                                       n.trees = 75,
+                                       shrinkage = .1,
+                                       n.minobsinnode = 10),
+                  verbose = FALSE
+                  )
+```
+```{r}
+confirmed_50k<-  cases_bytype_worldwide %>% group_by(Country.Region) %>%
+  filter(confirmed_cases > 50000 & (Income.group..World.Bank.== "Upper middle income" | Income.group..World.Bank.== "High income" )   )
+confirmed_50k$Current.BCG.vaccination. <- (confirmed_50k$Current.BCG.vaccination.=="Yes")*1
+#library("ggpubr")
+
+ggscatter(confirmed_50k, x = "Current.BCG.vaccination.", y = "confirmed_cases", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "current BCG vaccination", ylab = "Confirmed cases")
+
+```
+
+
+
+```{r}
+
+daily_confirmed_cases <- coronavirus %>%
+  filter(Country.Region %in% confirmed_50k$Country.Region) %>%
+  group_by(Country.Region, date) %>%
+  filter(type == "confirmed") %>%
+  summarise(total_cases = sum(cases, na.rm = T)) %>%
+  mutate(cum_cases = cumsum(total_cases))
+
+
+confirmed_50k$Current.BCG.vaccination.
+#"China"   "France"  "Germany" "Iran"    "Italy"   "Spain"   "US"    
+# 1 0 0 1 0 0 0
+daily_confirmed_cases<- daily_confirmed_cases %>% 
+mutate(BCG = case_when(
+              Country.Region == "China" ~ 1,
+                Country.Region == "France" ~0,
+                Country.Region == "Germany" ~0,
+               Country.Region == "Iran" ~1,
+               Country.Region == "Italy" ~0,
+               Country.Region == "Spain" ~0,
+               Country.Region == "US" ~0,
+              TRUE ~ NA_real_))
+
+# Draw a line plot of cumulative cases vs. date, grouped and colored by is_china
+# Define aesthetics within the line geom
+plt_cum_confirmed_cases_50k <- ggplot(daily_confirmed_cases) +
+  geom_line(aes(x=date,
+                y=cum_cases,
+                col=as.factor(BCG),
+               group=Country.Region)) +
+  ylab("Cumulative confirmed cases")
+# See the plot
+plt_cum_confirmed_cases_50k
 ```
 
 
 ```{r}
+
+ linearModelVar <- lm(confirmed_cases ~ Current.BCG.vaccination., confirmed_50k)
+library("pROC")    
+lin_mod <- 149318   - 80175 * confirmed_50k$Current.BCG.vaccination. 
+
+summary(linearModelVar)
+
+plot(roc(confirmed_50k$confirmed_cases, lin_mod), print.auc = TRUE)
+
+```
+
+```{r}
+
+getwd()
 set.seed(42)
 library(flexmix)
 poisson_mm <- stepFlexmix(matrix_covid ~ 1, 
@@ -223,7 +517,6 @@ poisson_mm <- stepFlexmix(matrix_covid ~ 1,
                                  nrep = 5, 
                                  model = FLXMCmvpois(),
                                  control = list(tolerance = 1e-15, iter.max = 1000))
-
 hist(matrix_covid)
 # Select the model that minimize the BIC
 best_poisson_mm <- getModel(poisson_mm, which = "BIC")
