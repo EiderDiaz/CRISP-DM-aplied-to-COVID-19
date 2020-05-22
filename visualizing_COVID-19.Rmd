@@ -3,6 +3,8 @@ title: "Coronavirus"
 author: "eider"
 date: "3/26/2020"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 In December 2019, COVID-19 coronavirus was first identified in the Wuhan region of China. By March 11, 2020, the World Health Organization (WHO) categorized the COVID-19 outbreak as a pandemic. A lot has happened in the months in between with major outbreaks in Iran, South Korea, and Italy.
@@ -24,6 +26,9 @@ library(coronavirus)
 library(dplyr)
 library(readr)
 library(ggplot2)
+library(reshape2)
+library(glmnet)
+
 ```
 
 
@@ -53,11 +58,11 @@ head(coronavirus)
 
 #administrative_coverage <- #read_excel("C:/Users/eider/Downloads/KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK#KKKKKK/administrative_coverage.xls",sheet = "Data", na = "N/A")
 #
-BCG_coverage <- administrative_coverage %>% 
-  group_by(PerCentCoverage, NamePublicationEnglish) %>%
-  filter(VaccineCode == "BCG") 
+#BCG_coverage <- administrative_coverage %>% 
+ # group_by(PerCentCoverage, NamePublicationEnglish) %>%
+#  filter(VaccineCode == "BCG") 
 
-glimpse(BCG_coverage) 
+#glimpse(BCG_coverage) 
 
 
 #
@@ -70,7 +75,7 @@ glimpse(BCG_coverage)
 #
 
 #group the data by region and type and calculate the total cases 
-region_type_worldwide <- coronavirus %>% group_by(Country.Region, type) %>%
+region_type_worldwide <- coronavirus %>% group_by(date,Country.Region, type) %>%
   summarise(total_cases = sum(cases)) %>%
   filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
   arrange(-total_cases)
@@ -84,58 +89,245 @@ region_type_worldwide <- coronavirus %>% group_by(Country.Region, type) %>%
 ```
 
 ```{r}
- # "confirmed" 
-confirmed_cases_worldwide <- coronavirus %>%
-  group_by(Country.Region) %>%
-  filter(type=="confirmed") %>% 
-  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+ 
+# "confirmed" 
+confirmed_cases_worldwide_2 <- coronavirus %>%
+  group_by(Country.Region,date) %>%
+  filter(type=="confirmed", Country.Region=="Mexico") %>% 
+  #filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
   summarise(confirmed_cases = sum(cases)) %>%
-  arrange(-confirmed_cases)
+  mutate(cum_conf= cumsum(confirmed_cases)) %>%
+  as.data.frame()
+  
 
 #"recovered"  
-recovered_cases_worldwide <- coronavirus %>%
-  group_by(Country.Region) %>%
-  filter(type=="recovered") %>% 
-  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+recovered_cases_worldwide_2 <- coronavirus %>%
+  group_by(Country.Region,date) %>%
+  filter(type=="recovered", Country.Region=="Mexico") %>% 
+  #filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
   summarise(recovered_cases = sum(cases)) %>%
-  arrange(-recovered_cases)
-# "death"  
-
-death_cases_worldwide <- coronavirus %>%
-  group_by(Country.Region) %>%
-  filter(type=="death") %>% 
-  filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
-  summarise(death_cases = sum(cases)) %>%
-  arrange(-death_cases)
-
-nrow(recovered_cases_worldwide)
+  mutate(cum_rec= cumsum(recovered_cases)) %>%
+  as.data.frame()
 
 
+death_cases_worldwide_2 <- coronavirus %>%
+  group_by(Country.Region,date) %>%
+  filter(type=="death" , Country.Region=="Mexico") %>% 
+  #filter(Country.Region %in% confirmed_500cases$Country.Region) %>%
+  summarise(death_cases = sum(cases))%>%
+  mutate(cum_death= cumsum(death_cases)) %>%
+  as.data.frame()
 
-cases_bytype_worldwide <- merge(confirmed_cases_worldwide, recovered_cases_worldwide, by= "Country.Region")
 
-cases_bytype_worldwide <-  merge(cases_bytype_worldwide, death_cases_worldwide, by="Country.Region")
 
-#________________________________sparse________________________
-#library(Matrix)
-#  confirmed <- as.vector(confirmed_cases_worldwide[,2])
-#  recovered<- as.vector(recovered_cases_worldwide[,2])
-#  deaths<- as.vector(death_cases_worldwide[,2])
-#  deaths[,1]
-#sprse<- c(confirmed,recovered,deaths)
-#vec<-unlist(sprse)
-#vec[which(c(1,diff(vec)) != 0)]
-#
-#
-#matspare <- as(matrix(data =vec,nrow=nrow(confirmed) ),"dgCMatrix")
-#
-#sparsematrix <- as.matrix(matspare)
-#colnames(sparsematrix ) <- c("confirmed" ,"recovered", "death")
-#rownames(sparsematrix) <- confirmed_cases_worldwide$Country.Region
-#
-#save(sparsematrix,file="sparsematrix.RDATA" )
+
+
+cases_bytype_worldwide_2 <- cbind(confirmed_cases_worldwide_2,
+                                recovered_cases = recovered_cases_worldwide_2$recovered_cases,
+                                cum_rec = recovered_cases_worldwide_2$cum_rec,
+                                death_cases= death_cases_worldwide_2$death_cases,                                              cum_death= death_cases_worldwide_2$cum_death  )
+
+cases_bytype_worldwide_2$date <- as.Date(cases_bytype_worldwide_2$date)
+
+cases_bytype_worldwide_2 %>%
+  arrange(date)
+
+startdate <- head(cases_bytype_worldwide_2$date,1)
+#dias transcurridos
+cases_bytype_worldwide_2$days <-  as.numeric(cases_bytype_worldwide_2$date - startdate)
+
+#select variables for lasso glmnet
+
+split_tresholds <- c(1:100)
+
+y <- cases_bytype_worldwide_2$cum_death
+y_train<- y[split_tresholds]
+y_test <- y[-split_tresholds]
+
+x <- cases_bytype_worldwide_2 %>%
+  select(cum_conf, cum_rec, days) %>%
+  data.matrix()
+
+x_train<- x[split_tresholds,]
+x_test <- x[-split_tresholds,]
+
+
+lambdas <- 10^seq(3, -2, by = -.1)
+
+cv_fit <- cv.glmnet(x_train, y_train, alpha = 1, lambda = lambdas)
+
+plot(cv_fit)
+
+opt_lambda <- cv_fit$lambda.min
+opt_lambda
+
+fit <- cv_fit$glmnet.fit
+summary(fit)
+
+
+######################
+y_predicted <- predict(fit, s = opt_lambda, newx = x_test)
+
+
+
+
+# Sum of Squares Total and Error
+sst <- sum((y_train - mean(y_train))^2)
+sse <- sum((y_predicted - y_test)^2)
+
+# R squared
+rsq <- 1 - sse / sst
+rsq
+#> [1] 0.9318896
+
 
 ```
+
+
+
+
+
+```{r}
+
+
+
+cases_bytype_worldwide_2$pred_vals <- c(y_train,as.vector(y_predicted))
+ggplot(cases_bytype_worldwide_2,aes(x=days)) +
+  geom_line(aes(y=pred_vals),col="blue") +
+  geom_line(aes(y=cum_death)) +
+  geom_vline(xintercept = 100, color="red", 
+                 linetype="dashed")+
+  #geom_line(aes(y=cum_death),linetype="longdash")+
+  
+  ylab("Cumulative death cases in México") 
+
+
+
+```
+
+
+
+
+
+#treshold 50 days for train
+```{r}
+
+
+#select variables for lasso glmnet
+
+split_tresholds <- c(1:50)
+
+y <- cases_bytype_worldwide_2$cum_death
+y_train<- y[split_tresholds]
+y_test <- y[-split_tresholds]
+
+x <- cases_bytype_worldwide_2 %>%
+  select(cum_conf, cum_rec, days) %>%
+  data.matrix()
+
+x_train<- x[split_tresholds,]
+x_test <- x[-split_tresholds,]
+
+
+cv_fit <- cv.glmnet(x_train, y_train, alpha = 1, lambda = lambdas)
+
+plot(cv_fit)
+
+opt_lambda <- cv_fit$lambda.min
+opt_lambda
+
+fit <- cv_fit$glmnet.fit
+summary(fit)
+
+
+######################
+y_predicted <- predict(fit, s = opt_lambda, newx = x_test)
+
+
+
+
+# Sum of Squares Total and Error
+sst <- sum((y_train - mean(y_train))^2)
+sse <- sum((y_predicted - y_test)^2)
+
+# R squared
+rsq <- 1 - sse / sst
+rsq
+
+
+cases_bytype_worldwide_2$pred_vals <- c(y_train,as.vector(y_predicted))
+ggplot(cases_bytype_worldwide_2,aes(x=days)) +
+  geom_line(aes(y=pred_vals),col="blue") +
+  geom_line(aes(y=cum_death)) +
+  geom_vline(xintercept = 50, color="red", 
+                 linetype="dashed")+
+  #geom_line(aes(y=cum_death),linetype="longdash")+
+  
+  ylab("Cumulative death cases in México") 
+
+```
+
+
+```{r}
+
+#select variables for lasso glmnet
+
+split_tresholds <- c(50:nrow(cases_bytype_worldwide_2))
+split_tresholds 
+
+y <- cases_bytype_worldwide_2$death_cases
+y_train<- y[50:100]
+y_test <- y[101:114]
+
+x <- cases_bytype_worldwide_2 %>%
+  select(cum_conf, cum_rec, days) %>%
+  data.matrix()
+
+x_train<- x[50:100,]
+x_test <- x[101:114,]
+
+
+cv_fit <- cv.glmnet(x_train, y_train, alpha = 1, lambda = lambdas)
+
+plot(cv_fit)
+
+opt_lambda <- cv_fit$lambda.1se
+opt_lambda
+
+fit <- cv_fit$glmnet.fit
+summary(fit)
+
+
+######################
+y_predicted <- predict(fit, s = opt_lambda, newx = x_test)
+
+
+
+
+# Sum of Squares Total and Error
+sst <- sum((y_train - mean(y_train))^2)
+sse <- sum((y_predicted - y_test)^2)
+
+# R squared
+rsq <- 1 - sse / sst
+rsq
+
+
+cases_bytype_worldwide_2$pred_vals <- c(cases_bytype_worldwide_2$cum_death[1:49], y_train,as.vector(y_predicted))
+
+ggplot(cases_bytype_worldwide_2,aes(x=days)) +
+  geom_line(aes(y=pred_vals),col="blue") +
+  geom_line(aes(y=death_cases)) +
+  geom_vline(xintercept = 50, color="red", 
+                 linetype="dashed")+
+   geom_vline(xintercept = 100, color="red", 
+                 linetype="dashed")+
+  #geom_line(aes(y=cum_death),linetype="longdash")+
+  
+  ylab("Cumulative death cases in México") 
+
+```
+
 
 
 #divide dataset into 2
@@ -149,23 +341,23 @@ cases_bytype_worldwide <-  merge(cases_bytype_worldwide, death_cases_worldwide, 
 #last_5_confirmed <- confirmed_cases_worldwide[(nrow(confirmed_cases_worldwide)-10):
                                       #nrow(confirmed_cases_worldwide),]
 
-
-# divide the coronavirus cases into 3 categories 
-gap1<- 1:round(nrow(confirmed_cases_worldwide)/3)
-gap2 <- (gap+1):((gap+1)+gap)
-gap3<- (max(gap2)+1):nrow(confirmed_cases_worldwide) 
-
-group1_confirmed <- region_type_worldwide[gap1,]
-group2_confirmed <- region_type_worldwide[gap2,]
-group3_confirmed <- region_type_worldwide[gap3,]
-
-region_type_worldwide <- region_type_worldwide %>% 
-  mutate(group = case_when(
-              Country.Region %in% group1_confirmed$Country.Region ~ 1,
-                Country.Region %in% group2_confirmed$Country.Region ~2,
-                Country.Region %in% group3_confirmed$Country.Region~3,
-              TRUE ~ NA_real_))
-
+#
+## divide the coronavirus cases into 3 categories 
+#gap1<- 1:round(nrow(confirmed_cases_worldwide)/3)
+#gap2 <- (gap+1):((gap+1)+gap)
+#gap3<- (max(gap2)+1):nrow(confirmed_cases_worldwide) 
+#
+#group1_confirmed <- region_type_worldwide[gap1,]
+#group2_confirmed <- region_type_worldwide[gap2,]
+#group3_confirmed <- region_type_worldwide[gap3,]
+#
+#region_type_worldwide <- region_type_worldwide %>% 
+#  mutate(group = case_when(
+#              Country.Region %in% group1_confirmed$Country.Region ~ 1,
+#                Country.Region %in% group2_confirmed$Country.Region ~2,
+#                Country.Region %in% group3_confirmed$Country.Region~3,
+#              TRUE ~ NA_real_))
+#
 
 
 
@@ -178,15 +370,20 @@ confirmed <- group1_confirmed %>%
   filter(type=="recovered") 
   
 
-sd(confirmed$total_cases)
-summary(confirmed)
+top20_confirmed <- head(cases_bytype_worldwide, 20)
+top20_confirmed <- top20_confirmed[-1,]
+
+top5 <- head(top20_confirmed,5) 
 
 #top
- ggplot(group1_confirmed,aes(x=type,y=total_cases))+
+ ggplot(top20_confirmed,aes(x=1, y=confirmed_cases))+
   geom_boxplot()+
   geom_label( 
-    data=group1_confirmed %>% filter( (type=="confirmed" & total_cases>200000) | (type=="recovered" & total_cases>50000)  ), # Filter data first
-    aes(label=Country.Region))
+    data=top20_confirmed %>% filter(confirmed_cases >240000  ), # Filter data first
+    aes(label=Country.Region)) +
+   labs(y="Confirmed Cases", x = "")
+   
+ 
 #mid
  
 ggplot(group2_confirmed,aes(x=type,y=total_cases))+
@@ -221,13 +418,14 @@ ggplot(group3_confirmed,aes(x=type,y=total_cases))+
 #import BCG dataset 
 ```{r}
 
-
+setwd("C:/Users/eider/Documents/CRISP-DM applied on COVID-19")
 BCG_dataset<- read.csv("./BCG-ATLAS.csv")
 
 glimpse(BCG_dataset)
 #using only the filtered countries
 BCG_dataset <-  BCG_dataset %>%
   filter(country %in% confirmed_500cases$Country.Region) 
+
 nrow(BCG_dataset)
 #compliting the missin cases
 BCG_dataset <- rbind(BCG_dataset, c("Diamond Princess",NA,NA,NA,NA,NA,NA,NA),
@@ -255,6 +453,12 @@ completeFun <- function(data, desiredCols) {
 ```
 
 
+#join data with 
+```{r}
+
+```
+
+
 ```{r}
 #boxplot for income
 ggplot(enriched_ds %>% filter(type=="confirmed" & total_cases>1000) ,aes(x=Income.group..World.Bank.,y=total_cases))+
@@ -275,7 +479,7 @@ df_merged <- completeFun(enriched_ds,"Current.BCG.vaccination.")
                                     color = as.factor(Current.BCG.vaccination.))) +
     geom_point() 
 ```
-
+#correlations
 ```{r}
 
 enriched_ds$group <- NULL
@@ -321,6 +525,204 @@ ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
   
 ```
 
+
+#merge charly data pop with bcg+ covid datasets
+```{r}
+BCG<- read.csv("./BCG-ATLAS.csv")
+
+#using only the filtered countries
+BCG <-  BCG %>%
+  filter(country %in% confirmed_500cases$Country.Region) 
+
+
+#unique( BCG$Current.BCG.vaccination.)
+cases_bytype_worldwide <- merge(cases_bytype_worldwide,
+                                BCG,
+                                by.x = "Country.Region", by.y = "country",
+                                all.x = TRUE,
+                                all.y = FALSE)
+
+
+# charls + eider nigga fussion
+population_by_country_2020 <- read_csv("C:/Users/eider/Downloads/Telegram Desktop/population_by_country_2020.csv")
+
+
+population_by_country_2020 <-  population_by_country_2020 %>%
+  filter(Country %in% confirmed_500cases$Country.Region) 
+
+cases_bytype_worldwide_pop <- merge(cases_bytype_worldwide,
+                                population_by_country_2020,
+                                by.x = "Country.Region", by.y = "Country",
+                                all.x = TRUE,
+                                all.y = FALSE)
+
+colnames(cases_bytype_worldwide_pop)
+
+columnas <- c("Country.Region","confirmed_cases", "recovered_cases" ,"death_cases", "Income.group..World.Bank.", "Current.BCG.vaccination.", "Population (2020)",  "Density (P/Km²)","Land Area (Km²)", "Med. Age", "Urban Pop %")                       
+
+cases_bytype_worldwide_pop <- cases_bytype_worldwide_pop[columnas]
+columnas_cool <- c("Country","confirmed_cases", "recovered_cases" ,"death_cases", "Income_group", "BCG_vaccination", "Population",  "Density","Land Area", "Med_Age", "Urban Pop") 
+colnames(cases_bytype_worldwide_pop) <- columnas_cool
+
+write.csv(cases_bytype_worldwide_pop ,file ="full_enriched.csv")
+
+
+
+```
+
+#correlation matrix
+```{r}
+
+
+full_enriched <- read_csv("full_enriched.csv")
+
+#parse to numeric
+full_enriched$Income_group <- as.numeric(as.factor(full_enriched$Income_group)) 
+full_enriched$BCG_vaccination <-  as.numeric(as.factor(full_enriched$BCG_vaccination)) 
+full_enriched <- full_enriched[,-1] 
+
+cormat <- round(cor(full_enriched[,-1],method = "spearman"),2)
+melted_cormat <- melt(cormat)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+
+
+
+# Heatmap
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))+
+ coord_fixed()+
+  labs(y="", x = "")
+
+```
+
+#cumulative cases and deaths of top 3 + mexico
+```{r}
+
+
+
+confirmed_cases_worldwide <- coronavirus %>% 
+  filter(type== "confirmed") %>%
+  group_by( Country.Region, date) %>%
+  summarise(total_cases = sum(cases)) %>%
+  #ungroup() %>%
+  mutate(cum_cases = cumsum(total_cases))
+  
+death_cases_worldwide <- coronavirus %>% 
+  filter(type== "death") %>%
+  group_by(Country.Region, date) %>%
+  summarise(total_cases_d = sum(cases)) %>%
+  mutate(cum_cases_d = cumsum(total_cases_d))
+
+
+#merge confirmed with death cases
+confirmed_cases_worldwide <- cbind(confirmed_cases_worldwide,
+                                   death=death_cases_worldwide$total_cases_d,
+                                   cum_death=death_cases_worldwide$cum_cases_d)
+
+
+top3confirmed <- confirmed_cases_worldwide %>%
+  group_by(Country.Region) %>%
+  summarise(conf_cases = sum(total_cases)) %>%
+  arrange(-conf_cases) %>%
+  slice(2:4) 
+  
+  
+
+top3confirmed$Country.Region
+#get the mexico data
+mexico_confirmed <- confirmed_cases_worldwide[confirmed_cases_worldwide$Country.Region =="Mexico",] 
+#get the top 3 data
+top3confirmed <- confirmed_cases_worldwide[confirmed_cases_worldwide$Country.Region %in% top3confirmed$Country.Region,]
+
+#combine
+top3confirmed_mx <- rbind(top3confirmed,mexico_confirmed)
+top3confirmed_mx$Country.Region <- as.factor(top3confirmed_mx$Country.Region)
+colnames(top3confirmed_mx) <- c("Country", "date", "total_cases", "cum_cases","death_cases","cum_death")
+
+ggplot(top3confirmed_mx,aes(x=date, 
+                            group=Country,
+                            col= Country )) +
+  geom_line(aes(y=cum_cases)) +
+  geom_line(aes(y=cum_death),linetype="longdash")+
+  ylab("Cumulative confirmed cases") +
+  facet_wrap(~Country)
+
+```
+
+
+#get the first infected 
+```{r}
+
+summary_df <- coronavirus %>%
+  group_by(Country.Region, date, type) %>%
+  summarise(total_cases = sum(cases)) %>%
+  filter(type == "confirmed") %>%
+  arrange(total_cases)
+
+
+first_case <- summary_df %>%
+  # Convert variable to factor, so we can use complete later. We do this within
+  # group_by, because we want to operate by level of variable
+  group_by(Country.Region) %>% 
+  # Remove all rows of variable if there aren't any rows with values==0
+  filter(any(total_cases==0)) %>% 
+  # Remove all rows with values != 0
+  filter(total_cases != 0) %>% 
+  # Keep the first row of each variable, after sorting by Date
+  # This gives us the first non-zero row
+  arrange(date) %>% 
+  slice(1)
+
+first_case$date <-as.Date(first_case$date)
+
+
+
+
+#get the mexico data
+mexico_confirmed <- confirmed_cases_worldwide[confirmed_cases_worldwide$Country.Region =="Mexico",] 
+#get the top 3 data
+top3confirmed <- confirmed_cases_worldwide[confirmed_cases_worldwide$Country.Region %in% top3confirmed$Country.Region,]
+
+
+```
+
+
+```{r}
+glimpse(region_type_worldwide)
+```
+
+
+
+#lasso regression model with full enriched DS
+```{r}
+
+full_enriched <- read_csv("full_enriched.csv")
+
+#parse to numeric
+full_enriched$Income_group <- as.numeric(as.factor(full_enriched$Income_group)) 
+full_enriched$BCG_vaccination <-  as.numeric(as.factor(full_enriched$BCG_vaccination)) 
+#eliminate rownumber
+full_enriched <- full_enriched[,-1]
+#parse to dataframe
+full_enriched <- as.data.frame(full_enriched)
+#
+rownames(full_enriched) <- full_enriched[,1]
+#
+full_enriched <- full_enriched[,-1]
+
+
+```
+
+
+
+
 #merge cases by type with 
 
 ```{r}
@@ -332,11 +734,14 @@ BCG <-  BCG %>%
   filter(country %in% confirmed_500cases$Country.Region) 
 
 
-unique( BCG$Current.BCG.vaccination.)
-cases_bytype_worldwide <- merge(cases_bytype_worldwide, BCG, by.x = "Country.Region", by.y = "country",all.x = TRUE,all.y = FALSE)
+#unique( BCG$Current.BCG.vaccination.)
+cases_bytype_worldwide <- merge(cases_bytype_worldwide,
+                                BCG,
+                                by.x = "Country.Region", by.y = "country",
+                                all.x = TRUE,
+                                all.y = FALSE)
 
-#glimpse(cases_bytype_worldwide)
-unique(cases_bytype_worldwide$Current.BCG.vaccination.)
+
 
 
 subseting <- c("Country.Region", "confirmed_cases", "recovered_cases", "death_cases", "Current.BCG.vaccination.")
